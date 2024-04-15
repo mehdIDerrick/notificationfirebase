@@ -4,7 +4,7 @@ from firebase_admin import credentials, initialize_app, messaging
 from pydantic import BaseModel
 import csv
 from waitress import serve
-
+import uvicorn
 app = FastAPI()
 
 class TokenData(BaseModel):
@@ -68,4 +68,4 @@ async def send_notification(title: str, body: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    serve(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
