@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Body, UploadFile, File
 from firebase_admin import credentials, initialize_app, messaging
 from pydantic import BaseModel
 import csv
-
+from waitress import serve
 
 app = FastAPI()
 
@@ -66,3 +66,6 @@ async def send_notification(title: str, body: str):
         return {"success": True, "message": "Notifications sent successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    serve(app, host="0.0.0.0", port=8000)
