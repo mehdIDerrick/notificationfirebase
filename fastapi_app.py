@@ -35,7 +35,7 @@ async def register_token(token_data: TokenData):
     print(f"Token reçu : {token}")
     
     # Écrire le token dans un fichier CSV
-    with open('tokens.csv', mode='a', newline='') as file:
+    with open('tokens.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow([token])
 
