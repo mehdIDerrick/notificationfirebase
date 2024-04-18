@@ -30,6 +30,7 @@ cred = credentials.Certificate({
 
 firebase_app = initialize_app(cred)
 
+
 @app.post("/register-token/")
 async def register_token(token_data: TokenData):
     phone = token_data.phone
@@ -67,27 +68,41 @@ async def register_token(token_data: TokenData):
         print(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail="Failed to write to file.")
     
-@app.post("/send-notification/")
-async def send_notification(title: str, body: str):
+@app.get("/list-phones/")
+async def list_phones():
     try:
-        # Ouvrir le fichier CSV et récupérer les tokens
-        with open('tokens.csv', mode='r') as file:
-            csv_reader = csv.reader(file)
-            for row in csv_reader:
-                token = row[0]  # Supposant que le token est dans la première colonne
+        # Ouvrir le fichier CSV et récupérer les numéros de téléphone
+        with open('tokens.csv', mode='r', newline='') as file:
+            reader = csv.reader(file)
+            phones = [row[0] for row in reader]  # Récupère les numéros de téléphone
+        return {"success": True, "phones": phones}
+    except FileNotFoundError:
+        return {"success": False, "message": "No data found."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-                # Créer un message avec le token actuel
-                message = messaging.Message(
-                    notification=messaging.Notification(
-                        title=title,
-                        body=body,
-                    ),
-                    token=token,
-                )
+@app.post("/send-notification/")
+async def send_notification(phones: list = Body(...), title: str = Body(...), body: str = Body(...)):
+    try:
+        # Lire le fichier CSV pour trouver les tokens correspondants aux numéros fournis
+        phone_token_map = {}
+        with open('tokens.csv', mode='r', newline='') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                if row[0] in phones:
+                    phone_token_map[row[0]] = row[1]
 
-                # Envoyer la notification
-                response = messaging.send(message)
-                print(f"Notification sent to token {token}: {response}")
+        # Envoyer les notifications aux tokens correspondant aux numéros de téléphone spécifiés
+        for phone, token in phone_token_map.items():
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body,
+                ),
+                token=token,
+            )
+            response = messaging.send(message)
+            print(f"Notification sent to {phone} with token {token}: {response}")
 
         return {"success": True, "message": "Notifications sent successfully."}
     except Exception as e:
