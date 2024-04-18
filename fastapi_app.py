@@ -31,16 +31,41 @@ firebase_app = initialize_app(cred)
 
 @app.post("/register-token/")
 async def register_token(token_data: TokenData):
+    phone = token_data.phone
     token = token_data.token
-    print(f"Token reçu : {token}")
+    print(f"Phone: {phone}, Token: {token}")
+
+    # Read existing data
+    existing_tokens = []
+    try:
+        with open('tokens.csv', mode='r', newline='') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                existing_tokens.append(row)
+    except FileNotFoundError:
+        # File not found is okay, will create later
+        pass
+
+    # Check if phone number already exists
+    for i, row in enumerate(existing_tokens):
+        if row[0] == phone:
+            # Phone number already exists, update token
+            existing_tokens[i][1] = token
+            break
+    else:
+        # Phone number does not exist, add new entry
+        existing_tokens.append([phone, token])
+
+    # Write updated data to CSV file
+    try:
+        with open('tokens.csv', mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(existing_tokens)
+        return {"success": True, "message": "Token and phone number registered/updated successfully."}
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        raise HTTPException(status_code=500, detail="Failed to write to file.")
     
-    # Écrire le token dans un fichier CSV
-    with open('tokens.csv', mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([token])
-
-    return {"success": True, "message": "Token enregistré avec succès."}
-
 @app.post("/send-notification/")
 async def send_notification(title: str, body: str):
     try:
@@ -66,6 +91,7 @@ async def send_notification(title: str, body: str):
         return {"success": True, "message": "Notifications sent successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
