@@ -8,6 +8,7 @@ import uvicorn
 app = FastAPI()
 
 class TokenData(BaseModel):
+    phone: str
     token: str
 
 # Use environment variables for Firebase credentials
