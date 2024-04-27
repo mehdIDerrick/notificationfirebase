@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Messages Sent</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        /* Optional custom styles */
+        .table-responsive {
+            max-height: 500px; /* set a maximum height if you want scrolling */
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Messages Sent</h1>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Phone</th>
+                        <th>Title</th>
+                        <th>Body</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for message in messages %}
+                    <tr>
+                        <td>{{ message.phone }}</td>
+                        <td>{{ message.title }}</td>
+                        <td>{{ message.body }}</td>
+                        <td>{{ message.status }}</td>
+                        <td>
+                            {% if message.status != 1 %}
+                                <form action="/send-notification-firebase/" method="post">
+                                    <input type="hidden" name="phone" value="{{ message.phone }}">
+                                    <input type="hidden" name="title" value="{{ message.title }}">
+                                    <input type="hidden" name="body" value="{{ message.body }}">
+                                    <button type="submit" class="btn btn-primary">Resend Notification</button>
+                                </form>
+                            {% else %}
+                                <button type="button" class="btn btn-secondary" disabled>Notification Sent</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS (Optional, only needed if you use Bootstrap JavaScript features) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

@@ -1,113 +1,127 @@
-import os
-from fastapi import FastAPI, HTTPException, Body, UploadFile, File
-from firebase_admin import credentials, initialize_app, messaging
-from pydantic import BaseModel
-import csv
-from waitress import serve
-import uvicorn
-app = FastAPI()
 
+import logging
+from fastapi import FastAPI, HTTPException, Body, Request,Form
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from firebase_admin import credentials, initialize_app, messaging
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
+import os
+from dotenv import load_dotenv
+logging.basicConfig(level=logging.DEBUG)
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Firebase Admin SDK setup (use environment variables)
+cred = credentials.Certificate({
+  "type": "service_account",
+  "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+  "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+  "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n"),
+  "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+  "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+  "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+  "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+  "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
+  "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
+  "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN")  # Assuming you added this in your .env file
+})
+
+firebase_app = initialize_app(cred)
+
+uri = os.getenv("MONGODB_URI")
+# MongoDB Connection URI
+client = MongoClient(uri)
+
+# Test the connection
+
+db = client["my_orange"]  # Remplacez "your_database_name" par le nom de votre base de données MongoDB
+tokens_collection = db["user_orange"] 
+messages_collection = db["sent_messages"]  # Nouvelle collection pour stocker les messages envoyés
 class TokenData(BaseModel):
     phone: str
     token: str
 
-# Use environment variables for Firebase credentials
-cred = credentials.Certificate({
-  "type": "service_account",
-  "project_id": "my-dash-a67f9",
-  "private_key_id": "946023728439248710cc8c4d076c92a90e32cb31",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDYuUZRp5AryhV8\nxOriFJ1sAEYWkK7cjNkUYg5c6W3RQYAEGnu88shV5gHAmRbQH5sRgBJL0ixjTZiB\n8rC/WrTYqKCxnTMzoLzgV/ofI+xfhwvUop1IqEnup4gHFefTSmvsXZ9JcrOEsM+H\nlMSEtj77g3Y6IA8loGbIBJwCNldtynVjCTR/kNyVRjKNvTCEKr1+vkLyMcjG7zVE\nh0ORaAGNVgBjzyrOjT+H3bQG0wNHoB+p+p38cKAkiOf4/s1RrWdDxFKcC/7DR5M7\njDxGPIny9XJnljGVsJGAQrAiRAwDmRYYMhKhRfCvNmlzB9tqNpKy972/YZ7Qdsnw\nCCR/6p2VAgMBAAECggEAGgQPrsCnJrfhDB5qtc3/YcDHU8Z1fztB2de1iANrhTml\nf5ia7wEpTwpyfmds3M9WeEDVXBhe72LCt81lg0BabOxn3I/ANDvg6ytpy/AuMVTO\n9O0Pusec7GhcWha6mAYbM39qSNEF6hv8JaHpqfwN+SJRqxjrHeYF6zqGbHY6g47C\nuBP955svNBq3OeHU2B8OEIRwPKcx56ngd9SHhOwD6ErEsp9s/HHQk67XzLGyH6Sx\ntFQePAXM421zXZOSIFjNQ16BhVhfnogfHmKz/9X1GXz56l9Sb67TvHLcxXXr8gSu\n2rFyplxhjRd727YqHDleKVJuQ5xCNXu9NQ2AtF9jVwKBgQD7KCLk67XZXGdq+2jM\nYwCF/E+nImMjqB9XyN3BaJL8xqZB5bTEzpot11xcNi+zoR6d4WYMQFKnMJ7dw0Xr\nnlaDLiqUMW+kICUCmwou4Z43+iMUNb5fIsB0syM9IEbjpXD5OqTiGj/oj+22Sbl/\nu5h+zzG8imrU72ohLwmasL3zfwKBgQDc5yfeiOceTBDzjrc/I2AhTGNQdjGETt1l\nzGqaIefDEppM5d7BAicGQGrXi5qUenfwjMsWqEshZf1Pe1rncPAWTgWpcZKIkMel\n2pfED+xAO9z351yFsRCpLpgYmxAkgLzIX4YgxJP1iYK7T8+2LijxFk44ltKkZqwn\nm7I+n5/o6wKBgHAHgjEclvwCxLqqtB9fFc+uMRV7OD+icYClv4zTCaWpMmX4gX68\nLXe/NZqILRTyDIceEHfshTHAdUy0Gs8zzKEtCZ8awhKyp++Wmp840mtjrxwHsQgc\npz4m3dQZPqWymUcCiqO0U8d30+/YyN6aHjaKU0QndenPdUaiBaWzqrcfAoGBAK2/\nVrmO3pIS7EZVW0Za8bJfHcJcpIfXbAY0qShAQMVLLXgMWY9fvQgKxL5yfIwKY6od\nY2OXzTgguwO4F4DwcLZqecOTo9isX4vRCgvZJk5Dh4KpRDmXUm5vSowX8rNzWokT\nsTC2zVWT6fKgTNSTK/qsO6wA3P8YDpI8wQ7GiIUvAoGBAJHdgGia9OGIbBXtyqUF\nJFZEwqR9CCogunWOr9XlyAUZ9RD4OhZnOkxXzOwS/ptg/MoMKBK2BcXYibLbiOiV\nWaEEBOzCXrE0LQi/zTkDqIlGD9YWNLv2T4Qw3AXyHANcct2y5JAaIrFSqdNs+oyz\nUUirDlEstmMVer/e7FD621AK\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-7o5xg@my-dash-a67f9.iam.gserviceaccount.com",
-  "client_id": "110916257392787033128",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-7o5xg%40my-dash-a67f9.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-})
-
- 
-
-firebase_app = initialize_app(cred)
-
+def insert_sent_message(phone: str, title: str, body: str, token: str = "", status: str = "0"):
+    messages_collection.insert_one({
+        "phone": phone,
+        "title": title,
+        "body": body,
+        "token": token,
+        "status": status
+    })
+def upsert_token(phone, token):
+    tokens_collection.update_one(
+        {"phone": phone},
+        {"$set": {"token": token}},
+        upsert=True
+    )
 
 @app.post("/register-token/")
 async def register_token(token_data: TokenData):
-    phone = token_data.phone
-    token = token_data.token
-    print(f"Phone: {phone}, Token: {token}")
-
-    # Read existing data
-    existing_tokens = []
     try:
-        with open('tokens.csv', mode='r', newline='') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                existing_tokens.append(row)
-    except FileNotFoundError:
-        # File not found is okay, will create later
-        pass
-
-    # Check if phone number already exists
-    for i, row in enumerate(existing_tokens):
-        if row[0] == phone:
-            # Phone number already exists, update token
-            existing_tokens[i][1] = token
-            break
-    else:
-        # Phone number does not exist, add new entry
-        existing_tokens.append([phone, token])
-
-    # Write updated data to CSV file
-    try:
-        with open('tokens.csv', mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerows(existing_tokens)
+        upsert_token(token_data.phone, token_data.token)
         return {"success": True, "message": "Token and phone number registered/updated successfully."}
     except Exception as e:
-        print(f"An error occurred: {e}")
-        raise HTTPException(status_code=500, detail="Failed to write to file.")
-    
-@app.get("/list-phones/")
-async def list_phones():
-    try:
-        # Ouvrir le fichier CSV et récupérer les numéros de téléphone
-        with open('tokens.csv', mode='r', newline='') as file:
-            reader = csv.reader(file)
-            phones = [row[0] for row in reader]  # Récupère les numéros de téléphone
-        return {"success": True, "phones": phones}
-    except FileNotFoundError:
-        return {"success": False, "message": "No data found."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"An error occurred: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update database.")
 
-@app.post("/send-notification/")
-async def send_notification(phones: list = Body(...), title: str = Body(...), body: str = Body(...)):
+@app.post("/send-notification-firebase/")
+async def send_notification_firebase(phone: str = Form(...), title: str = Form(...), body: str = Form(...)):
     try:
-        # Lire le fichier CSV pour trouver les tokens correspondants aux numéros fournis
-        phone_token_map = {}
-        with open('tokens.csv', mode='r', newline='') as file:
-            reader = csv.reader(file)
-            for row in reader:
-                if row[0] in phones:
-                    phone_token_map[row[0]] = row[1]
+        # Rechercher le document de l'utilisateur et vérifier le statut
+        message_document = messages_collection.find_one({"phone": phone, "title": title, "body": body})
+        if message_document and message_document['status'] == 1:
+            return {"error": "Notification sending is disabled for this message"}
 
-        # Envoyer les notifications aux tokens correspondant aux numéros de téléphone spécifiés
-        for phone, token in phone_token_map.items():
+        token_document = tokens_collection.find_one({"phone": phone})
+        if token_document:
+            print("token user", token_document['token'])
             message = messaging.Message(
-                notification=messaging.Notification(
-                    title=title,
-                    body=body,
-                ),
-                token=token,
+                notification=messaging.Notification(title=title, body=body),
+                token=token_document['token']
             )
             response = messaging.send(message)
-            print(f"Notification sent to {phone} with token {token}: {response}")
+            # Mise à jour du document du message avec le statut envoyé (peut-être définir à 0 ou 1 selon la logique d'entreprise)
+            messages_collection.update_one(
+                {"phone": phone, "title": title, "body": body},
+                {"$set": {"status": 1}},  # Supposons que 0 signifie 'envoyé avec succès'
+                upsert=True  # Insère le document si non trouvé
+            )
+            return {"success": True, "message": f"Notification sent to {phone}. Response: {response}"}
+        else:
+            return {"error": "No token found for given phone number"}
 
-        return {"success": True, "message": "Notifications sent successfully."}
     except Exception as e:
+        logging.error(f"An error occurred: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    
+@app.post("/insert-message/")
+async def insert_message(phone: str = Form(...), title: str = Form(...), body: str = Form(...)):
+    try:
+        # Vérifier si le téléphone est valide (vous pouvez ajouter plus de validation si nécessaire)
+
+        # Insérer le message dans MongoDB
+        insert_sent_message(phone, title, body)  # Vous pouvez laisser le token vide pour un message non envoyé
+        
+        return {"success": True, "message": f"Message inserted for {phone}."}
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/view-messages/", response_class=HTMLResponse)
+async def view_messages(request: Request):
+    messages = list(messages_collection.find())
+    return templates.TemplateResponse("messages_list.html", {"request": request, "messages": messages})
+
+
+@app.get("/send-form/", response_class=HTMLResponse)
+async def send_form(request: Request):
+    phones = [doc['phone'] for doc in tokens_collection.find({}, {"phone": 1})]
+    return templates.TemplateResponse("send_form.html", {"request": request, "phones": phones})
