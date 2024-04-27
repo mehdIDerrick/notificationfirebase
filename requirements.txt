@@ -1,8 +1,7 @@
-﻿fastapi==0.110.1
+fastapi==0.110.1
 uvicorn
 python-firebase==1.2
 firebase-admin==6.5.0
 pydantic==2.6.4
-pymongo
-pydantic
-dotenv
+python-dotenv==1.0.1
+pymongo==4.6.3
