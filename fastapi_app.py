@@ -34,7 +34,7 @@ cred = credentials.Certificate({
 
 firebase_app = initialize_app(cred)
 
-uri = os.getenv("MONGODB_URI")
+uri = f"{os.getenv('MONGODB_URI')}?w=majority"
 # MongoDB Connection URI
 client = MongoClient(uri)
 
