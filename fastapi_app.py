@@ -125,3 +125,6 @@ async def view_messages(request: Request):
 async def send_form(request: Request):
     phones = [doc['phone'] for doc in tokens_collection.find({}, {"phone": 1})]
     return templates.TemplateResponse("send_form.html", {"request": request, "phones": phones})
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
