@@ -101,7 +101,29 @@ async def send_notification_firebase(phone: str = Form(...), title: str = Form(.
         logging.error(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    
+@app.post("/send-notification-Allfirebase/")
+async def send_notification_firebase(phone: str = Form(...), title: str = Form(...), body: str = Form(...)):
+    try:
+        # Rechercher le document de l'utilisateur et vérifier le statut
+        message_document = messages_collection.find_one({"phone": phone, "title": title, "body": body})
+
+        token_document = tokens_collection.find_one({"phone": phone})
+        if token_document:
+            print("token user", token_document['token'])
+            message = messaging.Message(
+                notification=messaging.Notification(title=title, body=body),
+                token=token_document['token']
+            )
+            response = messaging.send(message)
+            # Mise à jour du document du message avec le statut envoyé (peut-être définir à 0 ou 1 selon la logique d'entreprise)
+            return {"success": True, "message": f"Notification sent to {phone}. Response: {response}"}
+        else:
+            return {"error": "No token found for given phone number"}
+
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+  
 @app.post("/insert-message/")
 async def insert_message(phone: str = Form(...), title: str = Form(...), body: str = Form(...)):
     try:
